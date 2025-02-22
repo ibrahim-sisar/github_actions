@@ -1,0 +1,33 @@
+name: Pull Request Notification to Discord
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+jobs:
+  notify-discord:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Get Changed Files from GitHub API
+        id: changed-files
+        run: |
+          FILES=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            "https://api.github.com/repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/files" \
+            | jq -r '.[].filename' | tr '\n' ' ')
+          echo "FILES=$FILES" >> $GITHUB_ENV
+
+      - name: Format PR Timestamp
+        id: format-time
+        run: |
+          FORMATTED_TIME=$(date -u "+%A, %B %d, %Y at %I:%M %p UTC")
+          echo "FORMATTED_TIME=$FORMATTED_TIME" >> $GITHUB_ENV
+
+      - name: Send Notification to Discord
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: |
+          FILES_FORMATTED=$(echo "${{ env.FILES }}" | tr ' ' '\n')
+          MESSAGE="📢 **Pull Request Update!**\n👤 **User:** ${{ github.actor }}\n🔗 **PR Title:** ${{ github.event.pull_request.title }}\n📝 **PR Description:**\n${{ github.event.pull_request.body }}\n📂 **Modified files:**\n\`\`\`${FILES_FORMATTED}\`\`\`\n⏰ **Time:** ${{ env.FORMATTED_TIME }}"
+
+          PAYLOAD=$(jq -n --arg msg "$MESSAGE" '{username: "GitHub Actions", content: $msg}')
+          curl -X POST -H "Content-Type: application/json" -d "$PAYLOAD" "$DISCORD_WEBHOOK_URL"
