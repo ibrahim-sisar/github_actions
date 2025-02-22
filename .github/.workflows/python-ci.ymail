@@ -1,1 +1,22 @@
+name: اسم الأتمتة  # (اختياري) يمكنك تسميته بأي اسم
+on: [push, pull_request]  # متى يعمل؟ عند رفع كود أو إرسال PR
+
+jobs:
+  اسم_المهمة:
+    runs-on: ubuntu-latest  # تحديد نظام التشغيل (Linux, Windows, Mac)
+    
+    steps:
+      - name: 📥 تحميل الكود
+        uses: actions/checkout@v2  # تحميل الملفات من GitHub
+        
+      - name: 🏗️ تثبيت Python
+        uses: actions/setup-python@v3
+        with:
+          python-version: "3.10"  # تحديد إصدار Python
+        
+      - name: 🏗️ تثبيت المكتبات
+        run: pip install -r requirements.txt  # تثبيت المكتبات
+        
+      - name: 🚀 تشغيل الكود
+        run: python main.py  # تشغيل كود Python
 
