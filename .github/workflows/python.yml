@@ -1,25 +1,0 @@
-name: تشغيل عند كل Commit  # اسم الأتمتة
-
-on:
-  push:  # يعمل عند رفع كود (commit & push)
-    branches:
-      - main  # يعمل فقط عند رفع تغييرات إلى الفرع الرئيسي
-
-jobs:
-  run-on-commit:
-    runs-on: ubuntu-latest  # تشغيل على Linux
-
-    steps:
-      - name: 📥 تحميل الكود
-        uses: actions/checkout@v2  # تحميل الكود من GitHub
-
-      - name: 🏗️ تثبيت Python
-        uses: actions/setup-python@v3
-        with:
-          python-version: "3.10"  # تحديد إصدار Python
-
-      - name: 🚀 تشغيل البرنامج
-        run: python main.py  # تشغيل كود Python
-
-      - name: 📝 تسجيل `commit` الجديد
-        run: echo "تم تشغيل GitHub Actions عند رفع commit جديد ✅"
