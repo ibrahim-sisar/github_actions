@@ -3,44 +3,45 @@ name: Discord Notification on File Change
 on:
   push:
     branches:
-      - main  # يتم تشغيله عند أي تعديل على الفرع الرئيسي
+      - main  # Runs on any modification to the main branch
 
 jobs:
   notify-discord:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4  # إحضار الكود
-
-      - name: Get Changed Files
+      - name: Get Changed Files from GitHub API
         id: changed-files
         run: |
-          FILES=$(git diff --name-only HEAD~1)
+          FILES=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            "https://api.github.com/repos/${{ github.repository }}/commits/${{ github.sha }}" \
+            | jq -r '.files[].filename' | tr '\n' ', ')
           echo "FILES=$FILES" >> $GITHUB_ENV
+
+      - name: Format Commit Timestamp
+        id: format-time
+        run: |
+          FORMATTED_TIME=$(date -u -d "${{ github.event.head_commit.timestamp }}" "+%A, %B %d, %Y at %I:%M %p UTC")
+          echo "FORMATTED_TIME=$FORMATTED_TIME" >> $GITHUB_ENV
 
       - name: Send Notification to Discord
         env:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
           COMMIT_AUTHOR: ${{ github.actor }}
-          COMMIT_TIMESTAMP: ${{ github.event.head_commit.timestamp }}
+          FORMATTED_TIME: ${{ env.FORMATTED_TIME }}
           FILES_CHANGED: ${{ env.FILES }}
         run: |
-          # استبدال السطور الجديدة بفواصل لإنشاء قائمة ملفات نظيفة
-          FILES_FORMATTED=$(echo "$FILES_CHANGED" | tr '\n' ',')
-
-          # إذا لم يكن هناك ملفات معدلة، لا ترسل رسالة
           if [[ -z "$FILES_CHANGED" ]]; then
             echo "No files changed, skipping Discord notification."
             exit 0
           fi
 
-          # إعداد بيانات JSON
+          # Prepare JSON payload
           PAYLOAD=$(jq -n \
             --arg author "$COMMIT_AUTHOR" \
-            --arg files "$FILES_FORMATTED" \
-            --arg time "$COMMIT_TIMESTAMP" \
-            '{username: "GitHub Actions", content: ("🚀 **تم تعديل ملفات!**\n👤 **المستخدم:** " + $author + "\n📂 **الملفات المعدلة:** ```" + $files + "``` \n⏰ **الوقت:** " + $time)}')
+            --arg files "$FILES_CHANGED" \
+            --arg time "$FORMATTED_TIME" \
+            '{username: "GitHub Actions", content: ("🚀 **Files have been modified!**\n👤 **User:** " + $author + "\n📂 **Modified files:** ```" + $files + "``` \n⏰ **Time:** " + $time)}')
 
-          # إرسال البيانات إلى Discord
+          # Send notification to Discord
           curl -X POST -H "Content-Type: application/json" -d "$PAYLOAD" "$DISCORD_WEBHOOK_URL"
