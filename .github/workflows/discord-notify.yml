@@ -3,7 +3,7 @@ name: Discord Notification on File Change
 on:
   push:
     branches:
-      - main  # يتم تشغيله عند التعديلات على الفرع الرئيسي
+      - main  # يتم تشغيله عند أي تعديل على الفرع الرئيسي
 
 jobs:
   notify-discord:
@@ -16,16 +16,31 @@ jobs:
       - name: Get Changed Files
         id: changed-files
         run: |
-          echo "files=$(git diff-tree --no-commit-id --name-only -r ${{ github.sha }})" >> $GITHUB_ENV
+          FILES=$(git diff --name-only HEAD~1)
+          echo "FILES=$FILES" >> $GITHUB_ENV
 
       - name: Send Notification to Discord
         env:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
           COMMIT_AUTHOR: ${{ github.actor }}
           COMMIT_TIMESTAMP: ${{ github.event.head_commit.timestamp }}
+          FILES_CHANGED: ${{ env.FILES }}
         run: |
-          FILES_CHANGED="${{ env.files }}"
-          PAYLOAD=$(jq -n --arg author "$COMMIT_AUTHOR" --arg files "$FILES_CHANGED" --arg time "$COMMIT_TIMESTAMP" \
-            '{username: "GitHub Actions", content: ("🚀 **Files have been modified!**\n👤 **user:** " + $author + "\n📂 **Modified files:**\n```" + $files + "```\n⏰ **the time:** " + $time)}')
+          # استبدال السطور الجديدة بفواصل لإنشاء قائمة ملفات نظيفة
+          FILES_FORMATTED=$(echo "$FILES_CHANGED" | tr '\n' ',')
 
+          # إذا لم يكن هناك ملفات معدلة، لا ترسل رسالة
+          if [[ -z "$FILES_CHANGED" ]]; then
+            echo "No files changed, skipping Discord notification."
+            exit 0
+          fi
+
+          # إعداد بيانات JSON
+          PAYLOAD=$(jq -n \
+            --arg author "$COMMIT_AUTHOR" \
+            --arg files "$FILES_FORMATTED" \
+            --arg time "$COMMIT_TIMESTAMP" \
+            '{username: "GitHub Actions", content: ("🚀 **تم تعديل ملفات!**\n👤 **المستخدم:** " + $author + "\n📂 **الملفات المعدلة:** ```" + $files + "``` \n⏰ **الوقت:** " + $time)}')
+
+          # إرسال البيانات إلى Discord
           curl -X POST -H "Content-Type: application/json" -d "$PAYLOAD" "$DISCORD_WEBHOOK_URL"
