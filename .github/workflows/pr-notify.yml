@@ -14,7 +14,7 @@ jobs:
         run: |
           FILES=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
             "https://api.github.com/repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/files" \
-            | jq -r '.[].filename' | tr '\n' ' ')
+            | jq -r '.[].filename')
           echo "FILES=$FILES" >> $GITHUB_ENV
 
       - name: Format PR Timestamp
@@ -27,12 +27,17 @@ jobs:
         env:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
         run: |
-          # Format file list for better readability
-          FILES_FORMATTED=$(echo "${{ env.FILES }}" | tr ' ' '\n')
+          # Convert files list into a formatted string
+          FILES_FORMATTED=$(echo "${{ env.FILES }}" | sed ':a;N;$!ba;s/\n/\\n/g')
 
-          # Construct the Discord message
-          MESSAGE="📢 **Pull Request Update!**\n👤 **User:** ${{ github.actor }}\n🔗 **PR Title:** ${{ github.event.pull_request.title }}\n📝 **PR Description:**\n${{ github.event.pull_request.body }}\n📂 **Modified files:**\n\`\`\`${FILES_FORMATTED}\`\`\`\n⏰ **Time:** ${{ env.FORMATTED_TIME }}"
+          # Construct the message with proper formatting
+          MESSAGE=$(printf "📢 **Pull Request Update!**\n👤 **User:** %s\n🔗 **PR Title:** %s\n📝 **PR Description:**\n%s\n📂 **Modified files:**\n\`\`\`%s\`\`\`\n⏰ **Time:** %s" \
+            "${{ github.actor }}" \
+            "${{ github.event.pull_request.title }}" \
+            "${{ github.event.pull_request.body }}" \
+            "$FILES_FORMATTED" \
+            "${{ env.FORMATTED_TIME }}")
 
-          # Convert message to JSON and send to Discord
+          # Convert the message to JSON and send it to Discord
           PAYLOAD=$(jq -n --arg msg "$MESSAGE" '{username: "GitHub Actions", content: $msg}')
           curl -X POST -H "Content-Type: application/json" -d "$PAYLOAD" "$DISCORD_WEBHOOK_URL"
