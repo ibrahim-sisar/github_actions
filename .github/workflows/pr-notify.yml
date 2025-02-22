@@ -2,7 +2,8 @@ name: Pull Request Notification to Discord
 
 on:
   pull_request:
-    types: [opened, synchronize, reopened]
+    types: [opened, synchronize, reopened]  # Runs when a PR is created, updated, or reopened
+
 jobs:
   notify-discord:
     runs-on: ubuntu-latest
@@ -26,8 +27,12 @@ jobs:
         env:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
         run: |
+          # Format file list for better readability
           FILES_FORMATTED=$(echo "${{ env.FILES }}" | tr ' ' '\n')
+
+          # Construct the Discord message
           MESSAGE="📢 **Pull Request Update!**\n👤 **User:** ${{ github.actor }}\n🔗 **PR Title:** ${{ github.event.pull_request.title }}\n📝 **PR Description:**\n${{ github.event.pull_request.body }}\n📂 **Modified files:**\n\`\`\`${FILES_FORMATTED}\`\`\`\n⏰ **Time:** ${{ env.FORMATTED_TIME }}"
 
+          # Convert message to JSON and send to Discord
           PAYLOAD=$(jq -n --arg msg "$MESSAGE" '{username: "GitHub Actions", content: $msg}')
           curl -X POST -H "Content-Type: application/json" -d "$PAYLOAD" "$DISCORD_WEBHOOK_URL"
