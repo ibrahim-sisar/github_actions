@@ -1,0 +1,31 @@
+name: Discord Notification on File Change
+
+on:
+  push:
+    branches:
+      - main  # يتم تشغيله عند التعديلات على الفرع الرئيسي
+
+jobs:
+  notify-discord:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4  # إحضار الكود
+
+      - name: Get Changed Files
+        id: changed-files
+        run: |
+          echo "files=$(git diff-tree --no-commit-id --name-only -r ${{ github.sha }})" >> $GITHUB_ENV
+
+      - name: Send Notification to Discord
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          COMMIT_AUTHOR: ${{ github.actor }}
+          COMMIT_TIMESTAMP: ${{ github.event.head_commit.timestamp }}
+        run: |
+          FILES_CHANGED="${{ env.files }}"
+          PAYLOAD=$(jq -n --arg author "$COMMIT_AUTHOR" --arg files "$FILES_CHANGED" --arg time "$COMMIT_TIMESTAMP" \
+            '{username: "GitHub Actions", content: ("🚀 **Files have been modified!**\n👤 **user:** " + $author + "\n📂 **Modified files:**\n```" + $files + "```\n⏰ **the time:** " + $time)}')
+
+          curl -X POST -H "Content-Type: application/json" -d "$PAYLOAD" "$DISCORD_WEBHOOK_URL"
