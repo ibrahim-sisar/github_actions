@@ -1,9 +1,11 @@
-name: Discord Notification on File Change
+name: Discord Notification on File Changes & Pull Requests
 
 on:
   push:
     branches:
-      - main  # Runs on any modification to the main branch
+      - main  # Runs on modifications to the main branch
+  pull_request:
+    types: [opened, synchronize, reopened]  # Runs when a PR is created, updated, or reopened
 
 jobs:
   notify-discord:
@@ -21,27 +23,30 @@ jobs:
       - name: Format Commit Timestamp
         id: format-time
         run: |
-          FORMATTED_TIME=$(date -u -d "${{ github.event.head_commit.timestamp }}" "+%A, %B %d, %Y at %I:%M %p UTC")
+          FORMATTED_TIME=$(date -u -d "${{ github.event.head_commit.timestamp }}" "+%A, %B %d, %Y at %I:%M %p UTC" 2>/dev/null || date -u -j -f "%Y-%m-%dT%H:%M:%SZ" "${{ github.event.head_commit.timestamp }}" "+%A, %B %d, %Y at %I:%M %p UTC")
           echo "FORMATTED_TIME=$FORMATTED_TIME" >> $GITHUB_ENV
+
+      - name: Prepare Notification
+        id: prepare-message
+        run: |
+          if [[ "${{ github.event_name }}" == "push" ]]; then
+            MESSAGE="🚀 **Files have been modified!**\n👤 **User:** ${{ github.actor }}\n📂 **Modified files:** \n\`\`\`${{ env.FILES }}\`\`\`\n⏰ **Time:** ${{ env.FORMATTED_TIME }}"
+          elif [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            MESSAGE="📢 **Pull Request Update!**\n👤 **User:** ${{ github.actor }}\n🔗 **PR Title:** ${{ github.event.pull_request.title }}\n📝 **PR Description:**\n${{ github.event.pull_request.body }}\n📂 **Modified files:** \n\`\`\`${{ env.FILES }}\`\`\`\n⏰ **Time:** $(date -u "+%A, %B %d, %Y at %I:%M %p UTC")"
+          else
+            MESSAGE="⚠️ Unknown event triggered the workflow!"
+          fi
+          echo "MESSAGE=$MESSAGE" >> $GITHUB_ENV
 
       - name: Send Notification to Discord
         env:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
-          COMMIT_AUTHOR: ${{ github.actor }}
-          FORMATTED_TIME: ${{ env.FORMATTED_TIME }}
-          FILES_CHANGED: ${{ env.FILES }}
+          MESSAGE: ${{ env.MESSAGE }}
         run: |
-          if [[ -z "$FILES_CHANGED" ]]; then
-            echo "No files changed, skipping Discord notification."
+          if [[ -z "${MESSAGE}" ]]; then
+            echo "No message to send, skipping Discord notification."
             exit 0
           fi
 
-          # Prepare JSON payload
-          PAYLOAD=$(jq -n \
-            --arg author "$COMMIT_AUTHOR" \
-            --arg files "$FILES_CHANGED" \
-            --arg time "$FORMATTED_TIME" \
-            '{username: "GitHub Actions", content: ("🚀 **Files have been modified!**\n👤 **User:** " + $author + "\n📂 **Modified files:** ```" + $files + "``` \n⏰ **Time:** " + $time)}')
-
-          # Send notification to Discord
+          PAYLOAD=$(jq -n --arg msg "$MESSAGE" '{username: "GitHub Actions", content: $msg}')
           curl -X POST -H "Content-Type: application/json" -d "$PAYLOAD" "$DISCORD_WEBHOOK_URL"
