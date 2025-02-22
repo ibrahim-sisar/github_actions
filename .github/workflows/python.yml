@@ -18,9 +18,6 @@ jobs:
         with:
           python-version: "3.10"  # تحديد إصدار Python
 
-      - name: 📦 تثبيت المكتبات
-        run: pip install -r requirements.txt  # تثبيت المكتبات المطلوبة
-
       - name: 🚀 تشغيل البرنامج
         run: python main.py  # تشغيل كود Python
 
